@@ -1,0 +1,50 @@
+#!/usr/bin/python3
+
+import argparse
+import base64
+import hashlib
+import os
+
+import bs4
+
+ap = argparse.ArgumentParser()
+ap.add_argument("files", nargs="+")
+
+args = ap.parse_args()
+
+
+for fn in args.files:
+    with open(fn) as f:
+        hparse = bs4.BeautifulSoup(f.read(), "html.parser")
+    fdir = os.path.dirname(fn)
+    for tag in hparse.findAll(["link", "script"]):
+        attr = "src" if tag.name == "script" else "href"
+        if not tag.has_attr(attr):
+            continue
+        fm = tag[attr]
+        if fm.startswith(("http://", "ftp://")):
+            print(f"Warning: Insecure protocol {fm}")
+            continue
+        if fm.startswith("https://"):
+            # online paths currently not supported
+            continue
+        if fm.startswith("/"):  # absolute web path, we have to guess
+            fm = fm[1:]
+        ff = os.path.join(fdir, fm)
+        with open(ff, "rb") as ff1:
+            target = ff1.read()
+
+        if tag.has_attr("integrity"):
+            hashfunction = tag["integrity"].split("-")[0]
+            taghash = tag["integrity"].split("-")[1]
+            if hashfunction not in ["sha256", "sha384", "sha512"]:
+                print(f"Error: wrong hash function {hashfunction}")
+            hash = hashlib.new(hashfunction)
+            hash.update(target)
+            b64 = base64.b64encode(hash.digest()).decode()
+            if b64 != taghash:
+                print(f"Error: {ff} hash wrong (Expected: {b64}, got {taghash})")
+        else:
+            hash = hashlib.sha256(target)
+            b64 = base64.b64encode(hash.digest()).decode()
+            print(f'No SRI for {ff}, you could add: integrity="sha256-{b64}"')
