@@ -28,6 +28,10 @@ for fn in args.files:
         if fm.startswith("https://"):
             # online paths currently not supported
             continue
+        if tag.name == "link":
+            # SRI only for stylesheet link tags
+            if not tag.has_attr("rel") or tag["rel"][0] != "stylesheet":
+                continue
         if fm.startswith("/"):  # absolute web path, we have to guess
             fm = fm[1:]
         ff = os.path.join(fdir, fm)
